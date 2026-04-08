@@ -7,7 +7,6 @@ import { getJwtPayload, errorResponse } from './helpers.js';
 import { buildMockEmails, buildMockEmailDetail } from './mock.js';
 import { extractEmail } from '../utils/common.js';
 import { getMailboxIdByAddress } from '../db/index.js';
-import { parseEmailBody } from '../email/parser.js';
 
 /**
  * 处理邮件相关 API
@@ -21,7 +20,6 @@ import { parseEmailBody } from '../email/parser.js';
 export async function handleEmailsApi(request, db, url, path, options) {
   const isMock = !!options.mockOnly;
   const isMailboxOnly = !!options.mailboxOnly;
-  const r2 = options.r2;
 
   // 获取邮件列表
   if (path === '/api/emails' && request.method === 'GET') {
@@ -47,29 +45,14 @@ export async function handleEmailsApi(request, db, url, path, options) {
       
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 50);
       
-      try {
-        const { results } = await db.prepare(`
-          SELECT id, sender, to_addrs, subject, received_at, is_read, preview, verification_code
-          FROM messages 
-          WHERE mailbox_id = ?${timeFilter}
-          ORDER BY received_at DESC 
-          LIMIT ?
-        `).bind(mailboxId, ...timeParam, limit).all();
-        return Response.json(results);
-      } catch (e) {
-        const { results } = await db.prepare(`
-          SELECT id, sender, to_addrs, subject, received_at, is_read,
-                 CASE WHEN content IS NOT NULL AND content <> ''
-                      THEN SUBSTR(content, 1, 120)
-                      ELSE SUBSTR(COALESCE(html_content, ''), 1, 120)
-                 END AS preview
-          FROM messages 
-          WHERE mailbox_id = ?${timeFilter}
-          ORDER BY received_at DESC 
-          LIMIT ?
-        `).bind(mailboxId, ...timeParam, limit).all();
-        return Response.json(results);
-      }
+      const { results } = await db.prepare(`
+        SELECT id, sender, to_addrs, subject, received_at, is_read, preview, verification_code
+        FROM messages 
+        WHERE mailbox_id = ?${timeFilter}
+        ORDER BY received_at DESC 
+        LIMIT ?
+      `).bind(mailboxId, ...timeParam, limit).all();
+      return Response.json(results || []);
     } catch (e) {
       console.error('查询邮件失败:', e);
       return errorResponse('查询邮件失败', 500);
@@ -102,19 +85,11 @@ export async function handleEmailsApi(request, db, url, path, options) {
       }
       
       const placeholders = ids.map(() => '?').join(',');
-      try {
-        const { results } = await db.prepare(`
-          SELECT id, sender, to_addrs, subject, verification_code, preview, r2_bucket, r2_object_key, received_at, is_read
-          FROM messages WHERE id IN (${placeholders})${timeFilter}
-        `).bind(...ids, ...timeParam).all();
-        return Response.json(results || []);
-      } catch (e) {
-        const { results } = await db.prepare(`
-          SELECT id, sender, to_addrs, subject, content, html_content, received_at, is_read
-          FROM messages WHERE id IN (${placeholders})${timeFilter}
-        `).bind(...ids, ...timeParam).all();
-        return Response.json(results || []);
-      }
+      const { results } = await db.prepare(`
+        SELECT id, sender, to_addrs, subject, verification_code, preview, received_at, is_read
+        FROM messages WHERE id IN (${placeholders})${timeFilter}
+      `).bind(...ids, ...timeParam).all();
+      return Response.json(results || []);
     } catch (e) {
       return errorResponse('批量查询失败', 500);
     }
@@ -134,21 +109,8 @@ export async function handleEmailsApi(request, db, url, path, options) {
         return Response.json({ success: true, deletedCount: 0 });
       }
       
-      // 先查出所有 r2_object_key，再删除 DB 记录，最后清理 R2
-      const { results: toDelete } = await db.prepare(
-        `SELECT r2_object_key FROM messages WHERE mailbox_id = ? AND r2_object_key IS NOT NULL`
-      ).bind(mailboxId).all();
-
       const result = await db.prepare(`DELETE FROM messages WHERE mailbox_id = ?`).bind(mailboxId).run();
       const deletedCount = result?.meta?.changes || 0;
-
-      if (r2 && toDelete?.length) {
-        for (const { r2_object_key } of toDelete) {
-          try { await r2.delete(r2_object_key); } catch (r2Err) {
-            console.error('清空邮件时删除 R2 对象失败:', r2Err);
-          }
-        }
-      }
 
       return Response.json({
         success: true,
@@ -157,25 +119,6 @@ export async function handleEmailsApi(request, db, url, path, options) {
     } catch (e) {
       console.error('清空邮件失败:', e);
       return errorResponse('清空邮件失败', 500);
-    }
-  }
-
-  // 下载 EML（从 R2 获取）- 必须在通用邮件详情处理器之前
-  if (request.method === 'GET' && path.startsWith('/api/email/') && path.endsWith('/download')) {
-    if (options.mockOnly) return errorResponse('演示模式不可下载', 403);
-    const id = path.split('/')[3];
-    const { results } = await db.prepare('SELECT r2_bucket, r2_object_key FROM messages WHERE id = ?').bind(id).all();
-    const row = (results || [])[0];
-    if (!row || !row.r2_object_key) return errorResponse('未找到对象', 404);
-    try {
-      if (!r2) return errorResponse('R2 未绑定', 500);
-      const obj = await r2.get(row.r2_object_key);
-      if (!obj) return errorResponse('对象不存在', 404);
-      const headers = new Headers({ 'Content-Type': 'message/rfc822' });
-      headers.set('Content-Disposition', `attachment; filename="${String(row.r2_object_key).split('/').pop()}"`);
-      return new Response(obj.body, { headers });
-    } catch (e) {
-      return errorResponse('下载失败', 500);
     }
   }
 
@@ -195,7 +138,7 @@ export async function handleEmailsApi(request, db, url, path, options) {
       }
       
       const { results } = await db.prepare(`
-        SELECT id, sender, to_addrs, subject, verification_code, preview, r2_bucket, r2_object_key, received_at, is_read
+        SELECT id, sender, to_addrs, subject, verification_code, preview, content, html_content, received_at, is_read
         FROM messages WHERE id = ?${timeFilter}
       `).bind(emailId, ...timeParam).all();
       if (results.length === 0) {
@@ -206,42 +149,16 @@ export async function handleEmailsApi(request, db, url, path, options) {
       }
       await db.prepare(`UPDATE messages SET is_read = 1 WHERE id = ?`).bind(emailId).run();
       const row = results[0];
-      let content = '';
-      let html_content = '';
-      
-      try {
-        if (row.r2_object_key && r2) {
-          const obj = await r2.get(row.r2_object_key);
-          if (obj) {
-            let raw = '';
-            if (typeof obj.text === 'function') raw = await obj.text();
-            else if (typeof obj.arrayBuffer === 'function') raw = await new Response(await obj.arrayBuffer()).text();
-            else raw = await new Response(obj.body).text();
-            const parsed = parseEmailBody(raw || '');
-            content = parsed.text || '';
-            html_content = parsed.html || '';
-          }
-        }
-      } catch (_) { }
 
-      if ((!content && !html_content)) {
-        try {
-          const fallback = await db.prepare('SELECT content, html_content FROM messages WHERE id = ?').bind(emailId).all();
-          const fr = (fallback?.results || [])[0] || {};
-          content = content || fr.content || '';
-          html_content = html_content || fr.html_content || '';
-        } catch (_) { }
-      }
-
-      return Response.json({ ...row, content, html_content, download: row.r2_object_key ? `/api/email/${emailId}/download` : '' });
+      return Response.json({
+        ...row,
+        content: row.content || '',
+        html_content: row.html_content || '',
+        download: ''
+      });
     } catch (e) {
-      const { results } = await db.prepare(`
-        SELECT id, sender, to_addrs, subject, content, html_content, received_at, is_read
-        FROM messages WHERE id = ?
-      `).bind(emailId).all();
-      if (!results || !results.length) return errorResponse('未找到邮件', 404);
-      await db.prepare(`UPDATE messages SET is_read = 1 WHERE id = ?`).bind(emailId).run();
-      return Response.json(results[0]);
+      console.error('获取邮件详情失败:', e);
+      return errorResponse('获取邮件详情失败', 500);
     }
   }
 
@@ -255,19 +172,8 @@ export async function handleEmailsApi(request, db, url, path, options) {
     }
 
     try {
-      // 先查 r2_object_key，删除前取出以便同步清理 R2
-      const row = await db.prepare(`SELECT r2_object_key FROM messages WHERE id = ?`).bind(emailId).first();
       const result = await db.prepare(`DELETE FROM messages WHERE id = ?`).bind(emailId).run();
       const deleted = (result?.meta?.changes || 0) > 0;
-
-      // 同步删除 R2 对象
-      if (deleted && r2 && row?.r2_object_key) {
-        try {
-          await r2.delete(row.r2_object_key);
-        } catch (r2Err) {
-          console.error('删除 R2 对象失败:', r2Err);
-        }
-      }
 
       return Response.json({
         success: true,

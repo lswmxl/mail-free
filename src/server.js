@@ -125,27 +125,6 @@ export default {
       const mailbox = normalizedRecipientAddr || normalizeEmailAlias(extractEmail(toHeader));
       const sender = extractEmail(fromHeader);
 
-      // 存储到 R2
-      const r2 = env.MAIL_EML;
-      let objectKey = '';
-      try {
-        const now = new Date();
-        const y = now.getUTCFullYear();
-        const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(now.getUTCDate()).padStart(2, '0');
-        const hh = String(now.getUTCHours()).padStart(2, '0');
-        const mm = String(now.getUTCMinutes()).padStart(2, '0');
-        const ss = String(now.getUTCSeconds()).padStart(2, '0');
-        const keyId = (globalThis.crypto?.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const safeMailbox = (mailbox || 'unknown').toLowerCase().replace(/[^a-z0-9@._-]/g, '_');
-        objectKey = `${y}/${m}/${d}/${safeMailbox}/${hh}${mm}${ss}-${keyId}.eml`;
-        if (r2 && rawBuffer) {
-          await r2.put(objectKey, new Uint8Array(rawBuffer), { httpMetadata: { contentType: 'message/rfc822' } });
-        }
-      } catch (e) {
-        console.error('R2 put failed:', e);
-      }
-
       // 生成预览和验证码
       const preview = (() => {
         const plain = textContent && textContent.trim() ? textContent : (htmlContent || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -189,7 +168,7 @@ export default {
 
       // 插入消息记录
       await DB.prepare(`
-        INSERT INTO messages (mailbox_id, sender, to_addrs, subject, verification_code, preview, r2_bucket, r2_object_key)
+        INSERT INTO messages (mailbox_id, sender, to_addrs, subject, verification_code, preview, content, html_content)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         mailboxId,
@@ -198,8 +177,8 @@ export default {
         subject || '(无主题)',
         verificationCode || null,
         preview || null,
-        'mail-eml',
-        objectKey || ''
+        textContent || null,
+        htmlContent || null
       ).run();
     } catch (err) {
       console.error('Email event handling error:', err);
