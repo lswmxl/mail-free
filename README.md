@@ -2,7 +2,7 @@
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/wenfxl/freemail)
 
-一个基于 Cloudflare Workers + D1 构建的**开源临时邮箱服务**，支持邮件接收、发送、转发、用户管理等完整功能。
+一个基于 Cloudflare Workers + Turso(libSQL) 构建的**开源临时邮箱服务**，支持邮件接收、发送、转发、用户管理等完整功能。
 
 **当前版本：V5.1.1** - 邮箱别名规范化支持扩展，支持 `.` `+` `-` 三种分隔符切分
 
@@ -40,7 +40,7 @@
 | ✉️ **发件支持** | Resend API 集成 · 多域名密钥 · 批量发送 · 定时发送 · 发件记录 |
 | 👥 **用户管理** | 三层权限模型 · 用户/邮箱分配 · 邮箱单点登录 · 登录权限控制 |
 | 🎨 **现代界面** | 毛玻璃效果 · 响应式设计 · 移动端适配 · 列表/卡片视图 |
-| ⚡ **技术架构** | Cloudflare Workers · D1 数据库 · Email Routing |
+| ⚡ **技术架构** | Cloudflare Workers · Turso(libSQL) · Email Routing |
 
 > 💡 邮箱用户自行修改密码功能默认关闭，如需开启请将 `mailbox.html` 第 77-80 行取消注释。
 
@@ -73,7 +73,8 @@
 
 | 变量名 | 说明 | 必需 |
 |--------|------|------|
-| TEMP_MAIL_DB | D1 数据库绑定 | 是 |
+| TURSO_DATABASE_URL | Turso 数据库 URL（如 `libsql://xxx.turso.io`） | 是 |
+| TURSO_AUTH_TOKEN | Turso 访问令牌（建议作为 Secret） | 是 |
 | MAIL_DOMAIN | 邮箱域名，多个用逗号分隔 | 是 |
 | ADMIN_PASSWORD | 严格管理员密码 | 是 |
 | ADMIN_NAME | 严格管理员用户名（默认 `admin`） | 否 |
@@ -129,7 +130,7 @@ FORWARD_RULES="" 或 "disabled" 或 "none"
 <summary><strong>常见问题</strong></summary>
 
 1. **邮件接收不到**：检查 Email Routing 配置、MX 记录、MAIL_DOMAIN 变量
-2. **数据库连接错误**：确认 D1 绑定名为 `TEMP_MAIL_DB`，检查 database_id
+2. **数据库连接错误**：确认 `TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN` 已在 Workers 变量/Secret 正确配置
 3. **登录问题**：确认 ADMIN_PASSWORD 和 JWT_TOKEN 已设置，清除浏览器缓存
 4. **界面显示异常**：检查静态资源路径，查看浏览器控制台错误
 </details>
@@ -144,8 +145,8 @@ wrangler dev
 # 查看实时日志
 wrangler tail
 
-# 检查数据库
-wrangler d1 execute TEMP_MAIL_DB --command "SELECT * FROM mailboxes LIMIT 10"
+# 检查运行日志里的数据库连接报错
+wrangler tail
 ```
 </details>
 

@@ -250,7 +250,7 @@ export async function handleMailboxAdminApi(request, db, url, path, options) {
       role: payload.role === 'admin' && isStrictAdmin(request, options) ? 'strictAdmin' : payload.role,
       mailboxId: payload.mailboxId
     } : null;
-    return await handleSetForward(request, { TEMP_MAIL_DB: db });
+    return await handleSetForward(request, { DB: db });
   }
 
   if (path === '/api/mailbox/favorite' && request.method === 'POST') {
@@ -261,35 +261,35 @@ export async function handleMailboxAdminApi(request, db, url, path, options) {
       role: payload.role === 'admin' && isStrictAdmin(request, options) ? 'strictAdmin' : payload.role,
       mailboxId: payload.mailboxId
     } : null;
-    return await handleToggleFavorite(request, { TEMP_MAIL_DB: db });
+    return await handleToggleFavorite(request, { DB: db });
   }
 
   if (path === '/api/mailboxes/batch-favorite' && request.method === 'POST') {
     if (isMock) return errorResponse('演示模式不可操作', 403);
     if (!isStrictAdmin(request, options)) return errorResponse('Forbidden', 403);
     request.user = { role: 'strictAdmin' };
-    return await handleBatchFavorite(request, { TEMP_MAIL_DB: db });
+    return await handleBatchFavorite(request, { DB: db });
   }
 
   if (path === '/api/mailboxes/batch-forward' && request.method === 'POST') {
     if (isMock) return errorResponse('演示模式不可操作', 403);
     if (!isStrictAdmin(request, options)) return errorResponse('Forbidden', 403);
     request.user = { role: 'strictAdmin' };
-    return await handleBatchForward(request, { TEMP_MAIL_DB: db });
+    return await handleBatchForward(request, { DB: db });
   }
 
   if (path === '/api/mailboxes/batch-favorite-by-address' && request.method === 'POST') {
     if (isMock) return errorResponse('演示模式不可操作', 403);
     if (!isStrictAdmin(request, options)) return errorResponse('Forbidden', 403);
     request.user = { role: 'strictAdmin' };
-    return await handleBatchFavoriteByAddress(request, { TEMP_MAIL_DB: db });
+    return await handleBatchFavoriteByAddress(request, { DB: db });
   }
 
   if (path === '/api/mailboxes/batch-forward-by-address' && request.method === 'POST') {
     if (isMock) return errorResponse('演示模式不可操作', 403);
     if (!isStrictAdmin(request, options)) return errorResponse('Forbidden', 403);
     request.user = { role: 'strictAdmin' };
-    return await handleBatchForwardByAddress(request, { TEMP_MAIL_DB: db });
+    return await handleBatchForwardByAddress(request, { DB: db });
   }
 
   // 邮箱密码修改（邮箱用户自己修改）

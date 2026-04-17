@@ -4,6 +4,7 @@
  */
 
 import { initDatabase } from './init.js';
+import { getOrCreateTursoD1Adapter } from './turso-adapter.js';
 
 /**
  * 获取数据库连接并验证有效性
@@ -12,19 +13,23 @@ import { initDatabase } from './init.js';
  * @throws {Error} 当数据库未配置或连接失败时抛出异常
  */
 export async function getDatabaseWithValidation(env) {
-  const db = env.TEMP_MAIL_DB;
-  
+  const dbFromContext = env && env.DB ? env.DB : null;
+  const tursoUrl = env && env.TURSO_DATABASE_URL ? env.TURSO_DATABASE_URL : (env ? env.LIBSQL_URL : null);
+  const tursoToken = env && env.TURSO_AUTH_TOKEN ? env.TURSO_AUTH_TOKEN : (env ? env.LIBSQL_AUTH_TOKEN : null);
+
+  const db = dbFromContext || (tursoUrl ? getOrCreateTursoD1Adapter(tursoUrl, tursoToken) : null);
+
   if (!db) {
-    throw new Error('数据库未配置，请检查 wrangler.toml 中的 [[d1_databases]] 绑定');
+    throw new Error('数据库未配置，请设置 TURSO_DATABASE_URL 与 TURSO_AUTH_TOKEN（或通过 env.DB 注入）');
   }
-  
+
   // 验证数据库连接
   try {
     await db.prepare('SELECT 1').all();
   } catch (error) {
     throw new Error(`数据库连接失败: ${error.message}`);
   }
-  
+
   return db;
 }
 

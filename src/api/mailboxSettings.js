@@ -4,6 +4,7 @@
  */
 
 import { isValidEmail } from '../utils/common.js';
+import { getDatabaseWithValidation } from '../db/index.js';
 
 /**
  * 检查用户是否有权限操作指定邮箱
@@ -63,7 +64,7 @@ export async function handleSetForward(req, env) {
       return new Response(JSON.stringify({ error: '转发目标邮箱格式无效' }), { status: 400 });
     }
     
-    const db = env.TEMP_MAIL_DB;
+    const db = await getDatabaseWithValidation(env);
     
     // 检查邮箱是否存在
     const mailbox = await db.prepare('SELECT id, address FROM mailboxes WHERE id = ? LIMIT 1')
@@ -116,7 +117,7 @@ export async function handleToggleFavorite(req, env) {
       return new Response(JSON.stringify({ error: '缺少有效的邮箱 ID' }), { status: 400 });
     }
     
-    const db = env.TEMP_MAIL_DB;
+    const db = await getDatabaseWithValidation(env);
     
     // 检查邮箱是否存在
     const mailbox = await db.prepare('SELECT id, is_favorite FROM mailboxes WHERE id = ? LIMIT 1')
@@ -174,7 +175,7 @@ export async function handleBatchFavorite(req, env) {
       return new Response(JSON.stringify({ error: '单次最多操作 100 个邮箱' }), { status: 400 });
     }
     
-    const db = env.TEMP_MAIL_DB;
+    const db = await getDatabaseWithValidation(env);
     const favoriteValue = is_favorite ? 1 : 0;
     
     // 批量更新
@@ -226,7 +227,7 @@ export async function handleBatchForward(req, env) {
       return new Response(JSON.stringify({ error: '转发目标邮箱格式无效' }), { status: 400 });
     }
     
-    const db = env.TEMP_MAIL_DB;
+    const db = await getDatabaseWithValidation(env);
     
     // 批量更新
     const placeholders = mailbox_ids.map(() => '?').join(',');
@@ -271,7 +272,7 @@ export async function handleBatchFavoriteByAddress(req, env) {
       return new Response(JSON.stringify({ error: '单次最多操作 100 个邮箱' }), { status: 400 });
     }
     
-    const db = env.TEMP_MAIL_DB;
+    const db = await getDatabaseWithValidation(env);
     const favoriteValue = is_favorite ? 1 : 0;
     
     // 规范化地址
@@ -288,7 +289,7 @@ export async function handleBatchFavoriteByAddress(req, env) {
     
     return new Response(JSON.stringify({
       success: true,
-      updated_count: result.meta?.changes || normalizedAddresses.length,
+      updated_count: ((result && result.meta && result.meta.changes) || normalizedAddresses.length),
       is_favorite: favoriteValue
     }), { status: 200 });
     
@@ -330,7 +331,7 @@ export async function handleBatchForwardByAddress(req, env) {
       return new Response(JSON.stringify({ error: '转发目标邮箱格式无效' }), { status: 400 });
     }
     
-    const db = env.TEMP_MAIL_DB;
+    const db = await getDatabaseWithValidation(env);
     
     // 规范化地址
     const normalizedAddresses = addresses.map(a => String(a || '').trim().toLowerCase()).filter(a => a);
@@ -346,7 +347,7 @@ export async function handleBatchForwardByAddress(req, env) {
     
     return new Response(JSON.stringify({
       success: true,
-      updated_count: result.meta?.changes || normalizedAddresses.length,
+      updated_count: ((result && result.meta && result.meta.changes) || normalizedAddresses.length),
       forward_to: forwardTarget
     }), { status: 200 });
     
