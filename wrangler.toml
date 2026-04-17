@@ -14,8 +14,8 @@ keep_vars=true
 [vars]
 # FORWARD_RULES="[{"prefix":"vip","email":"a@example.com"},{"prefix":"*","email":"example@qq.com"}]"
 # 走本机 IPv6 DB 网关时，填 http://[你的IPv6]:18080
-DB_API_URL="http://[2a0e:6a80:3:128::]:18080"
-# 令牌请用 wrangler secret put DB_API_TOKEN
+DB_API_URL="https://d1.4th.pp.ua"
+DB_API_TOKEN="SMMHoxwi8deP0ro9znfQNYzsOk-5ZkXpCyEEk5OSAOs"
 TURSO_DATABASE_URL=""
 ADMIN_NAME=""
 ADMIN_PASSWORD=""
