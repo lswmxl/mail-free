@@ -73,8 +73,10 @@
 
 | 变量名 | 说明 | 必需 |
 |--------|------|------|
-| TURSO_DATABASE_URL | Turso 数据库 URL（如 `libsql://xxx.turso.io`） | 是 |
-| TURSO_AUTH_TOKEN | Turso 访问令牌（建议作为 Secret） | 是 |
+| DB_API_URL | 本机数据库 IPv6 网关地址（如 `http://[2a0e:xxxx::1]:18080`） | 是（使用本机DB时） |
+| DB_API_TOKEN | 本机数据库网关令牌（建议 Secret） | 是（使用本机DB时） |
+| TURSO_DATABASE_URL | Turso 数据库 URL（如 `libsql://xxx.turso.io`） | 否（作为回退） |
+| TURSO_AUTH_TOKEN | Turso 访问令牌（建议作为 Secret） | 否（作为回退） |
 | MAIL_DOMAIN | 邮箱域名，多个用逗号分隔 | 是 |
 | ADMIN_PASSWORD | 严格管理员密码 | 是 |
 | ADMIN_NAME | 严格管理员用户名（默认 `admin`） | 否 |
@@ -130,7 +132,7 @@ FORWARD_RULES="" 或 "disabled" 或 "none"
 <summary><strong>常见问题</strong></summary>
 
 1. **邮件接收不到**：检查 Email Routing 配置、MX 记录、MAIL_DOMAIN 变量
-2. **数据库连接错误**：确认 `TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN` 已在 Workers 变量/Secret 正确配置
+2. **数据库连接错误**：确认 `DB_API_URL`（IPv6 地址）、`DB_API_TOKEN` 已在 Workers 变量/Secret 正确配置；若走回退再检查 `TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`
 3. **登录问题**：确认 ADMIN_PASSWORD 和 JWT_TOKEN 已设置，清除浏览器缓存
 4. **界面显示异常**：检查静态资源路径，查看浏览器控制台错误
 </details>

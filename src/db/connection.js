@@ -5,6 +5,7 @@
 
 import { initDatabase } from './init.js';
 import { getOrCreateTursoD1Adapter } from './turso-adapter.js';
+import { createHttpDbAdapter } from './http-db-adapter.js';
 
 /**
  * 获取数据库连接并验证有效性
@@ -14,13 +15,17 @@ import { getOrCreateTursoD1Adapter } from './turso-adapter.js';
  */
 export async function getDatabaseWithValidation(env) {
   const dbFromContext = env && env.DB ? env.DB : null;
+  const dbApiUrl = env && env.DB_API_URL ? String(env.DB_API_URL).trim() : '';
+  const dbApiToken = env && env.DB_API_TOKEN ? String(env.DB_API_TOKEN) : '';
   const tursoUrl = env && env.TURSO_DATABASE_URL ? env.TURSO_DATABASE_URL : (env ? env.LIBSQL_URL : null);
   const tursoToken = env && env.TURSO_AUTH_TOKEN ? env.TURSO_AUTH_TOKEN : (env ? env.LIBSQL_AUTH_TOKEN : null);
 
-  const db = dbFromContext || (tursoUrl ? getOrCreateTursoD1Adapter(tursoUrl, tursoToken) : null);
+  const db = dbApiUrl
+    ? createHttpDbAdapter(dbApiUrl, dbApiToken)
+    : (dbFromContext || (tursoUrl ? getOrCreateTursoD1Adapter(tursoUrl, tursoToken) : null));
 
   if (!db) {
-    throw new Error('数据库未配置，请设置 TURSO_DATABASE_URL 与 TURSO_AUTH_TOKEN（或通过 env.DB 注入）');
+    throw new Error('数据库未配置，请设置 DB_API_URL（IPv6本机网关）或 TURSO_DATABASE_URL 与 TURSO_AUTH_TOKEN（或通过 env.DB 注入）');
   }
 
   // 验证数据库连接

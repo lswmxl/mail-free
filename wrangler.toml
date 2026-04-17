@@ -4,11 +4,6 @@ main = "src/server.js"
 compatibility_date = "2024-01-01"
 keep_vars=true
 
-[[d1_databases]]
-binding = "DB"
-database_name = "mail-free-local"
-database_id = "98d3a9fc-8000-490c-9788-54c0f3727b27"
-
 # Turso/libSQL 连接（数据库 URL 放 vars，Token 请用 wrangler secret 设置）
 # 例如：
 # wrangler secret put TURSO_AUTH_TOKEN
@@ -18,6 +13,9 @@ database_id = "98d3a9fc-8000-490c-9788-54c0f3727b27"
 # 环境变量
 [vars]
 # FORWARD_RULES="[{"prefix":"vip","email":"a@example.com"},{"prefix":"*","email":"example@qq.com"}]"
+# 走本机 IPv6 DB 网关时，填 http://[你的IPv6]:18080
+DB_API_URL="http://[2a0e:6a80:3:128::]:18080"
+# 令牌请用 wrangler secret put DB_API_TOKEN
 TURSO_DATABASE_URL=""
 ADMIN_NAME=""
 ADMIN_PASSWORD=""
