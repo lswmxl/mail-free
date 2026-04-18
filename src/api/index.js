@@ -22,7 +22,8 @@ export async function handleApiRequest(request, db, mailDomains, options = {
   resendApiKey: '',
   adminName: '',
   authPayload: null,
-  mailboxOnly: false
+  mailboxOnly: false,
+  env: null
 }) {
   const url = new URL(request.url);
   const path = url.pathname;

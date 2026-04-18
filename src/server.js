@@ -17,6 +17,7 @@ import { extractEmail, normalizeEmailAlias, normalizeDomainList } from './utils/
 import { forwardByLocalPart, forwardByMailboxConfig } from './email/forwarder.js';
 import { parseEmailBody, extractVerificationCode } from './email/parser.js';
 import { getForwardTarget } from './db/mailboxes.js';
+import { storeRawEmail } from './storage/object-store.js';
 
 export default {
   /**
@@ -166,10 +167,20 @@ export default {
         toAddrs = resolvedRecipient || toHeader || '';
       }
 
+      // 原始邮件优先落对象存储（R2/MinIO），失败则仅记录在 DB
+      let rawStore = null;
+      if (rawBuffer && rawBuffer.byteLength) {
+        try {
+          rawStore = await storeRawEmail(env, mailbox, rawBuffer);
+        } catch (storeErr) {
+          console.error('原始邮件存储失败，回退仅DB保存:', storeErr?.message || storeErr);
+        }
+      }
+
       // 插入消息记录
       await DB.prepare(`
-        INSERT INTO messages (mailbox_id, sender, to_addrs, subject, verification_code, preview, content, html_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO messages (mailbox_id, sender, to_addrs, subject, verification_code, preview, content, html_content, r2_bucket, r2_object_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         mailboxId,
         sender,
@@ -178,7 +189,9 @@ export default {
         verificationCode || null,
         preview || null,
         textContent || null,
-        htmlContent || null
+        htmlContent || null,
+        rawStore?.bucket || null,
+        rawStore?.key || null
       ).run();
     } catch (err) {
       console.error('Email event handling error:', err);

@@ -7,6 +7,7 @@ import { getJwtPayload, errorResponse } from './helpers.js';
 import { buildMockEmails, buildMockEmailDetail } from './mock.js';
 import { extractEmail } from '../utils/common.js';
 import { getMailboxIdByAddress } from '../db/index.js';
+import { getRawEmail, deleteRawEmail } from '../storage/object-store.js';
 
 /**
  * 处理邮件相关 API
@@ -20,6 +21,7 @@ import { getMailboxIdByAddress } from '../db/index.js';
 export async function handleEmailsApi(request, db, url, path, options) {
   const isMock = !!options.mockOnly;
   const isMailboxOnly = !!options.mailboxOnly;
+  const env = options?.env || null;
 
   // 获取邮件列表
   if (path === '/api/emails' && request.method === 'GET') {
@@ -46,7 +48,7 @@ export async function handleEmailsApi(request, db, url, path, options) {
       const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 50);
       
       const { results } = await db.prepare(`
-        SELECT id, sender, to_addrs, subject, received_at, is_read, preview, verification_code
+        SELECT id, sender, to_addrs, subject, received_at, is_read, preview, verification_code, r2_bucket, r2_object_key
         FROM messages 
         WHERE mailbox_id = ?${timeFilter}
         ORDER BY received_at DESC 
@@ -86,7 +88,7 @@ export async function handleEmailsApi(request, db, url, path, options) {
       
       const placeholders = ids.map(() => '?').join(',');
       const { results } = await db.prepare(`
-        SELECT id, sender, to_addrs, subject, verification_code, preview, received_at, is_read
+        SELECT id, sender, to_addrs, subject, verification_code, preview, r2_bucket, r2_object_key, received_at, is_read
         FROM messages WHERE id IN (${placeholders})${timeFilter}
       `).bind(...ids, ...timeParam).all();
       return Response.json(results || []);
@@ -109,8 +111,20 @@ export async function handleEmailsApi(request, db, url, path, options) {
         return Response.json({ success: true, deletedCount: 0 });
       }
       
+      const { results: objectRows } = await db.prepare(`
+        SELECT r2_bucket, r2_object_key
+        FROM messages
+        WHERE mailbox_id = ? AND r2_object_key IS NOT NULL AND r2_object_key != ''
+      `).bind(mailboxId).all();
+
       const result = await db.prepare(`DELETE FROM messages WHERE mailbox_id = ?`).bind(mailboxId).run();
       const deletedCount = result?.meta?.changes || 0;
+
+      if (env && Array.isArray(objectRows) && objectRows.length > 0) {
+        await Promise.allSettled(
+          objectRows.map(row => deleteRawEmail(env, row.r2_bucket, row.r2_object_key))
+        );
+      }
 
       return Response.json({
         success: true,
@@ -119,6 +133,62 @@ export async function handleEmailsApi(request, db, url, path, options) {
     } catch (e) {
       console.error('清空邮件失败:', e);
       return errorResponse('清空邮件失败', 500);
+    }
+  }
+
+  // 下载原始 EML
+  if (request.method === 'GET' && /^\/api\/email\/\d+\/download$/.test(path)) {
+    const emailId = path.split('/')[3];
+    try {
+      const { results } = await db.prepare(`
+        SELECT id, sender, to_addrs, subject, content, html_content, r2_bucket, r2_object_key, received_at
+        FROM messages WHERE id = ?
+      `).bind(emailId).all();
+
+      if (!results || results.length === 0) {
+        return errorResponse('未找到邮件', 404);
+      }
+
+      const row = results[0];
+
+      if (env && row.r2_object_key) {
+        try {
+          const obj = await getRawEmail(env, row.r2_bucket, row.r2_object_key);
+          if (obj?.body) {
+            return new Response(obj.body, {
+              status: 200,
+              headers: {
+                'content-type': obj.contentType || 'message/rfc822',
+                'content-disposition': `attachment; filename="email-${emailId}.eml"`
+              }
+            });
+          }
+        } catch (e) {
+          console.error('对象存储读取失败，回退拼接下载:', e?.message || e);
+        }
+      }
+
+      const fallbackEml = [
+        `From: ${row.sender || ''}`,
+        `To: ${row.to_addrs || ''}`,
+        `Subject: ${row.subject || '(无主题)'}`,
+        `Date: ${row.received_at || new Date().toISOString()}`,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        row.content || row.html_content || ''
+      ].join('\r\n');
+
+      return new Response(fallbackEml, {
+        status: 200,
+        headers: {
+          'content-type': 'message/rfc822; charset=UTF-8',
+          'content-disposition': `attachment; filename="email-${emailId}.eml"`
+        }
+      });
+    } catch (e) {
+      console.error('下载邮件失败:', e);
+      return errorResponse('下载邮件失败', 500);
     }
   }
 
@@ -138,7 +208,7 @@ export async function handleEmailsApi(request, db, url, path, options) {
       }
       
       const { results } = await db.prepare(`
-        SELECT id, sender, to_addrs, subject, verification_code, preview, content, html_content, received_at, is_read
+        SELECT id, sender, to_addrs, subject, verification_code, preview, content, html_content, r2_bucket, r2_object_key, received_at, is_read
         FROM messages WHERE id = ?${timeFilter}
       `).bind(emailId, ...timeParam).all();
       if (results.length === 0) {
@@ -154,7 +224,7 @@ export async function handleEmailsApi(request, db, url, path, options) {
         ...row,
         content: row.content || '',
         html_content: row.html_content || '',
-        download: ''
+        download: `/api/email/${emailId}/download`
       });
     } catch (e) {
       console.error('获取邮件详情失败:', e);
@@ -172,8 +242,19 @@ export async function handleEmailsApi(request, db, url, path, options) {
     }
 
     try {
+      const { results } = await db.prepare(`
+        SELECT r2_bucket, r2_object_key
+        FROM messages WHERE id = ?
+      `).bind(emailId).all();
+
+      const objectRow = results?.[0] || null;
+
       const result = await db.prepare(`DELETE FROM messages WHERE id = ?`).bind(emailId).run();
       const deleted = (result?.meta?.changes || 0) > 0;
+
+      if (deleted && env && objectRow?.r2_object_key) {
+        await deleteRawEmail(env, objectRow.r2_bucket, objectRow.r2_object_key);
+      }
 
       return Response.json({
         success: true,

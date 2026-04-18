@@ -239,7 +239,8 @@ async function delegateApiRequest(context) {
       mockOnly: true,
       resendApiKey: RESEND_API_KEY,
       adminName: ADMIN_NAME,
-      authPayload
+      authPayload,
+      env
     });
   }
 
@@ -250,7 +251,8 @@ async function delegateApiRequest(context) {
       resendApiKey: RESEND_API_KEY,
       adminName: ADMIN_NAME,
       authPayload,
-      mailboxOnly: true
+      mailboxOnly: true,
+      env
     });
   }
 
@@ -258,7 +260,8 @@ async function delegateApiRequest(context) {
     mockOnly: false,
     resendApiKey: RESEND_API_KEY,
     adminName: ADMIN_NAME,
-    authPayload
+    authPayload,
+    env
   });
 }
 
