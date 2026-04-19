@@ -31,6 +31,8 @@ RESEND_API_KEY=""
 # 静态资源目录（Workers + Assets）
 [assets]
 directory = "public"
+# 让请求先进入 Worker，再决定是否回退到静态资源，避免首页变量注入失效
+run_worker_first = true
 # 显式指定绑定名，确保在 Worker 中通过 env.ASSETS 可用
 binding = "ASSETS"
 
