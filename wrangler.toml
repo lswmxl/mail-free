@@ -17,13 +17,13 @@ keep_vars=true
 DB_API_URL="https://d1.4th.pp.ua"
 DB_API_TOKEN="SMMHoxwi8deP0ro9znfQNYzsOk-5ZkXpCyEEk5OSAOs"
 TURSO_DATABASE_URL=""
-ADMIN_NAME=""
-ADMIN_PASSWORD=""
+ADMIN_NAME="myemail"
+ADMIN_PASSWORD="myemail.336699"
 GUEST_PASSWORD="guest"
-JWT_TOKEN=""
-JWT_TOKENGUEST_PASSWORD=""
+JWT_TOKEN="fjiwaiv23164s4fdsfs6df6wfdx"
+JWT_TOKENGUEST_PASSWORD="dfsfsfxzcv"
 SESSION_EXPIRE_DAYS="365"
-MAIL_DOMAIN=""
+MAIL_DOMAIN="young.indevs.in,parsley.indevs.in"
 RESEND_API_KEY=""
 
 
