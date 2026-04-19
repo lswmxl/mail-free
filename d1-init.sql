@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS messages (
   preview           TEXT,
   content           TEXT,
   html_content      TEXT,
+  r2_bucket         TEXT,
+  r2_object_key     TEXT,
   received_at       TEXT    DEFAULT CURRENT_TIMESTAMP,
   is_read           INTEGER DEFAULT 0,
   FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id)
